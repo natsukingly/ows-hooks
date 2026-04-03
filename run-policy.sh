@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# OWS executable policy ラッパー
-# OWS が stdin で PolicyContext を渡し、stdout で PolicyResult を受け取る
+# OWS executable policy wrapper
+# OWS passes PolicyContext via stdin and receives PolicyResult via stdout
 DIR="$(cd "$(dirname "$0")" && pwd)"
 export ERC8004_MOCK=true
 exec node "$DIR/dist/main.js"
