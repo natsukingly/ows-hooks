@@ -113,7 +113,7 @@ export const txSafety: Policy = {
       return {
         allow: true,
         metadata: { trusted: true, label: trustedEntry.label },
-      } as PolicyResult & { metadata?: Record<string, unknown> };
+      };
     }
 
     // 2. Address poisoning detection
@@ -133,7 +133,7 @@ export const txSafety: Policy = {
       return {
         allow: true,
         metadata: { trusted: false, risk: "unknown" },
-      } as PolicyResult & { metadata?: Record<string, unknown> };
+      };
     }
 
     if (riskScore.risk > riskData.max_risk_score) {
@@ -146,6 +146,6 @@ export const txSafety: Policy = {
     return {
       allow: true,
       metadata: { trusted: false, risk_score: riskScore.risk, risk_label: riskScore.label },
-    } as PolicyResult & { metadata?: Record<string, unknown> };
+    };
   },
 };

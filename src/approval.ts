@@ -288,6 +288,10 @@ export function approveRequest(id: string, approvedBy: string): boolean {
   if (!record) return false;
   if (record.status !== "pending") return false;
   if (new Date(record.expires_at) < new Date()) return false;
+  if (!verifyHmac(record)) {
+    console.error(`[hitl] SECURITY WARNING: HMAC verification failed for approval ${record.id}`);
+    return false;
+  }
 
   db.prepare(`
     UPDATE approvals SET status = 'approved', approved_by = ?, approved_at = ? WHERE id = ?

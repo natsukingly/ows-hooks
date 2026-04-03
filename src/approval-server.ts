@@ -1,4 +1,5 @@
 import http from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import {
   approveRequest,
   listPending,
@@ -33,14 +34,27 @@ function getOperatorToken(): string {
 }
 
 function isAuthorized(req: http.IncomingMessage): boolean {
-  const authHeader = req.headers["authorization"];
-  return authHeader === `Bearer ${getOperatorToken()}`;
+  const authHeader = req.headers["authorization"] ?? "";
+  const expected = `Bearer ${getOperatorToken()}`;
+  if (authHeader.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
 }
+
+const MAX_BODY_BYTES = 4096;
 
 function parseBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    let totalBytes = 0;
+    req.on("data", (chunk: Buffer) => {
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_BODY_BYTES) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
     req.on("error", reject);
   });
@@ -102,7 +116,9 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req);
       if (body) {
         const parsed = JSON.parse(body);
-        if (parsed.approved_by) approvedBy = parsed.approved_by;
+        if (typeof parsed.approved_by === "string" && parsed.approved_by.length <= 256) {
+          approvedBy = parsed.approved_by;
+        }
       }
     } catch {
       // Body is optional

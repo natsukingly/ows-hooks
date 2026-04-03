@@ -139,3 +139,37 @@ imports が大幅に減り、main.ts がスッキリする。
 - ポリシーの動的 import（外部npmパッケージ等）はスコープ外
 - hooks の個別 ON/OFF は今回のスコープ内（name 付き registry）
 - `ows-policy.json`（OWS CLI 用）は変更しない
+
+---
+
+## Phase 11: Code Review Fixes
+
+### Security
+- [x] S2: approval-server の operator token 比較を timingSafeEqual に変更
+- [x] S1: HITL_HMAC_SECRET のバリデーション（hitl-approval 到達前にクラッシュするリスク → hitl-approval 内で警告）
+- [x] S4: approveRequest に HMAC 検証追加
+- [x] S6: approved_by の長さバリデーション（256文字制限）
+- [x] S7: parseBody にサイズ制限追加（4KB）
+
+### Code Quality
+- [x] C1: post-sign.ts の未使用 import `getAuditLog` 削除
+- [x] C2: postSignHooks / onDenyHooks 配列エクスポート削除（registry に移行済み）
+- [x] C4: `metadata` を PolicyResult に正式追加、ChainResults の type hack 削除
+- [x] C5: withTimeout のタイマーリーク修正（clearTimeout 追加）
+
+### Architecture
+- [x] A1/A2: hitl-approval に erc8004-agent 不在時の警告追加
+- [x] A4: ows-policy.json の絶対パスを相対パスに修正
+
+### Config
+- [x] CF1: ows-hooks.json のキーバリデーション（未知のキーでエラー）
+- [x] CF2: pre-sign 空配列の警告
+
+### README
+- [x] R2: kyc-check がデフォルトパイプラインにないことを明記
+- [x] R4: typescript を devDependencies に移動
+
+### Tests
+- [x] T2: audit.ts のテスト（append-only 制約含む）
+- [x] T6: HMAC 改ざん検知テスト（tampered tx_to, tx_value, agent_id, DB直接改ざん）
+- [x] CF テスト: 空 pre-sign 配列の警告テスト

@@ -51,6 +51,9 @@ export const hitlApproval: Policy = {
     }
 
     const erc8004Result = chainResults["erc8004-agent"];
+    if (!erc8004Result) {
+      console.error("[hitl-approval] WARNING: erc8004-agent not in pipeline, assuming reputation=0");
+    }
     const reputation = (erc8004Result?.metadata?.["reputation"] as number) ?? 0;
 
     // Critical-value transactions (>5 ETH) always require approval, regardless of reputation

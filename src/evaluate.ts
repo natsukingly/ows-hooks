@@ -6,10 +6,11 @@ const POLICY_TIMEOUT_MS = Number(process.env["POLICY_TIMEOUT_MS"] ?? "5000");
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, policyName: string): Promise<T> {
   if (timeoutMs <= 0) return promise;
+  let timer: ReturnType<typeof setTimeout>;
   return Promise.race([
-    promise,
+    promise.finally(() => clearTimeout(timer)),
     new Promise<T>((_, reject) => {
-      setTimeout(() => {
+      timer = setTimeout(() => {
         reject(new Error(`Policy "${policyName}" timed out after ${timeoutMs}ms`));
       }, timeoutMs);
     }),

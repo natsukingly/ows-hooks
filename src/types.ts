@@ -25,6 +25,7 @@ export interface PolicyContext {
 export interface PolicyResult {
   allow: boolean;
   reason?: string;
+  metadata?: Record<string, unknown>;
 }
 
 /** Type for policy functions */
@@ -35,7 +36,7 @@ export type PolicyFn = (
 
 /** Policy Chaining: passes the result of the preceding policy to the next */
 export interface ChainResults {
-  [policyName: string]: PolicyResult & { metadata?: Record<string, unknown> };
+  [policyName: string]: PolicyResult;
 }
 
 /** Policy definition */
