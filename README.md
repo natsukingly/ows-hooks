@@ -260,7 +260,7 @@ Policies and hooks are configured via `ows-hooks.json` in the project root. This
 | Name | Description |
 |------|-------------|
 | `tx-safety` | Address book whitelist, risk scoring, address poisoning detection |
-| `kyc-check` | KYC verification (mock) |
+| `kyc-check` | KYC verification (mock) — not in default pipeline, add to `pre-sign` to enable |
 | `aml-check` | Sanctions list check (mock) |
 | `erc8004-agent` | ERC-8004 agent identity and reputation (on-chain) |
 | `policy-chain` | Dynamic rules based on upstream policy results |

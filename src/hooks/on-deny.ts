@@ -108,4 +108,3 @@ export const onDenyHookRegistry = new Map<string, OnDenyHook>([
   ["slack-alert", slackAlertOnDeny],
 ]);
 
-export const onDenyHooks: OnDenyHook[] = [...onDenyHookRegistry.values()];

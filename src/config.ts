@@ -31,6 +31,23 @@ export function loadConfig(): HooksConfig | null {
 
   const raw = readFileSync(configPath, "utf-8");
   const config = JSON.parse(raw) as HooksConfig;
+
+  // Validate known keys
+  const validKeys = new Set(["pre-sign", "post-sign", "on-deny"]);
+  for (const key of Object.keys(config)) {
+    if (!validKeys.has(key)) {
+      throw new Error(`ows-hooks.json: unknown key "${key}". Valid keys: ${[...validKeys].join(", ")}`);
+    }
+  }
+
+  // Validate array types
+  for (const key of validKeys) {
+    const value = config[key as keyof HooksConfig];
+    if (value !== undefined && !Array.isArray(value)) {
+      throw new Error(`ows-hooks.json: "${key}" must be an array of strings`);
+    }
+  }
+
   return config;
 }
 
@@ -43,8 +60,13 @@ export function resolveConfig(config: HooksConfig | null): ResolvedConfig {
     };
   }
 
+  const preSign = config["pre-sign"] ?? defaultPolicyOrder;
+  if (Array.isArray(config["pre-sign"]) && config["pre-sign"].length === 0) {
+    console.error("[config] WARNING: pre-sign is empty — all transactions will be allowed with no policy checks");
+  }
+
   return {
-    policies: resolvePolicies(config["pre-sign"] ?? defaultPolicyOrder),
+    policies: resolvePolicies(preSign),
     postSignHooks: resolveHookList(
       postSignHookRegistry,
       config["post-sign"] ?? defaultPostSignHooks,

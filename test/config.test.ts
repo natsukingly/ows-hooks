@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { resolveConfig, type HooksConfig } from "../src/config.js";
+import { describe, it, expect, vi } from "vitest";
+import { resolveConfig, loadConfig, type HooksConfig } from "../src/config.js";
 import { policyRegistry } from "../src/registry.js";
 
 describe("resolveConfig", () => {
@@ -83,5 +83,19 @@ describe("resolveConfig", () => {
     for (const name of knownNames) {
       expect(policyRegistry.has(name)).toBe(true);
     }
+  });
+
+  it("warns on empty pre-sign array", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const config: HooksConfig = {
+      "pre-sign": [],
+    };
+
+    const resolved = resolveConfig(config);
+    expect(resolved.policies).toHaveLength(0);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("pre-sign is empty"),
+    );
+    spy.mockRestore();
   });
 });

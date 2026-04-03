@@ -1,5 +1,4 @@
 import type { PostSignHook, PolicyContext, PolicyResult } from "../types.js";
-import { getAuditLog } from "../audit.js";
 
 /**
  * Post-sign hooks — fire after a signing request is APPROVED.
@@ -73,4 +72,3 @@ export const postSignHookRegistry = new Map<string, PostSignHook>([
   ["slack-notify", slackNotification],
 ]);
 
-export const postSignHooks: PostSignHook[] = [...postSignHookRegistry.values()];
