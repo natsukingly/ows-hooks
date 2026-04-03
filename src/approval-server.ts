@@ -74,102 +74,117 @@ function json(res: http.ServerResponse, status: number, data: unknown): void {
   res.end(JSON.stringify(data));
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
-
-  // GET /health
-  if (req.method === "GET" && url.pathname === "/health") {
-    json(res, 200, { status: "ok" });
-    return;
-  }
-
-  // GET /pending
-  if (req.method === "GET" && url.pathname === "/pending") {
-    if (!isAuthorized(req)) {
-      json(res, 401, { error: "Unauthorized" });
-      return;
-    }
-    const pending = listPending();
-    // Include approval tokens so the operator can use them
-    const withTokens = pending.map((p) => ({
-      ...p,
-      approval_token: generateApprovalToken(p.id),
-    }));
-    json(res, 200, { pending: withTokens });
-    return;
-  }
-
-  // POST /approve/:id
-  const approveMatch = url.pathname.match(/^\/approve\/([a-f0-9-]+)$/);
-  if (req.method === "POST" && approveMatch) {
-    if (!isAuthorized(req)) {
-      json(res, 401, { error: "Unauthorized" });
-      return;
-    }
-
-    const approvalId = approveMatch[1];
-
-    // Optional per-approval token (defense in depth)
-    const approvalTokenHeader = req.headers["x-approval-token"];
-    const approvalToken = Array.isArray(approvalTokenHeader)
-      ? approvalTokenHeader[0]
-      : approvalTokenHeader;
-    if (approvalToken && !verifyApprovalToken(approvalId, approvalToken)) {
-      json(res, 403, { error: "Invalid approval token" });
-      return;
-    }
-
-    // Parse optional body for approved_by
-    let approvedBy = "operator";
-    let body = "";
+export function createApprovalServer(): http.Server {
+  return http.createServer(async (req, res) => {
     try {
-      body = await parseBody(req);
+      const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
+
+      // GET /health
+      if (req.method === "GET" && url.pathname === "/health") {
+        json(res, 200, { status: "ok" });
+        return;
+      }
+
+      // GET /pending
+      if (req.method === "GET" && url.pathname === "/pending") {
+        if (!isAuthorized(req)) {
+          json(res, 401, { error: "Unauthorized" });
+          return;
+        }
+        const pending = listPending();
+        // Include approval tokens so the operator can use them
+        const withTokens = pending.map((p) => ({
+          ...p,
+          approval_token: generateApprovalToken(p.id),
+        }));
+        json(res, 200, { pending: withTokens });
+        return;
+      }
+
+      // POST /approve/:id
+      const approveMatch = url.pathname.match(/^\/approve\/([a-f0-9-]+)$/);
+      if (req.method === "POST" && approveMatch) {
+        if (!isAuthorized(req)) {
+          json(res, 401, { error: "Unauthorized" });
+          return;
+        }
+
+        const approvalId = approveMatch[1];
+
+        // Optional per-approval token (defense in depth)
+        const approvalTokenHeader = req.headers["x-approval-token"];
+        const approvalToken = Array.isArray(approvalTokenHeader)
+          ? approvalTokenHeader[0]
+          : approvalTokenHeader;
+        if (approvalToken && !verifyApprovalToken(approvalId, approvalToken)) {
+          json(res, 403, { error: "Invalid approval token" });
+          return;
+        }
+
+        // Parse optional body for approved_by
+        let approvedBy = "operator";
+        let body = "";
+        try {
+          body = await parseBody(req);
+        } catch (err) {
+          if (err instanceof HttpError) {
+            json(res, err.status, { error: err.message });
+            return;
+          }
+          json(res, 400, { error: "Invalid request body" });
+          return;
+        }
+
+        if (body) {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(body);
+          } catch {
+            json(res, 400, { error: "Invalid JSON body" });
+            return;
+          }
+
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            "approved_by" in parsed &&
+            typeof (parsed as { approved_by: unknown }).approved_by === "string" &&
+            (parsed as { approved_by: string }).approved_by.length <= 256
+          ) {
+            approvedBy = (parsed as { approved_by: string }).approved_by;
+          }
+        }
+
+        const success = approveRequest(approvalId, approvedBy);
+        if (success) {
+          json(res, 200, { approved: true, id: approvalId, approved_by: approvedBy });
+        } else {
+          json(res, 400, { error: "Approval failed — request may be expired, already approved, or not found" });
+        }
+        return;
+      }
+
+      json(res, 404, { error: "Not found" });
     } catch (err) {
-      if (err instanceof HttpError) {
-        json(res, err.status, { error: err.message });
-        return;
-      }
-      json(res, 400, { error: "Invalid request body" });
-      return;
-    }
-
-    if (body) {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(body);
-      } catch {
-        json(res, 400, { error: "Invalid JSON body" });
-        return;
-      }
-
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        "approved_by" in parsed &&
-        typeof (parsed as { approved_by: unknown }).approved_by === "string" &&
-        (parsed as { approved_by: string }).approved_by.length <= 256
-      ) {
-        approvedBy = (parsed as { approved_by: string }).approved_by;
+      console.error(`[approval-server] Unhandled request error: ${err instanceof Error ? err.message : String(err)}`);
+      if (!res.headersSent) {
+        json(res, 500, { error: "Internal server error" });
+      } else {
+        res.end();
       }
     }
+  });
+}
 
-    const success = approveRequest(approvalId, approvedBy);
-    if (success) {
-      json(res, 200, { approved: true, id: approvalId, approved_by: approvedBy });
-    } else {
-      json(res, 400, { error: "Approval failed — request may be expired, already approved, or not found" });
-    }
-    return;
-  }
-
-  json(res, 404, { error: "Not found" });
-});
-
-server.listen(PORT, () => {
-  console.log(`[approval-server] Listening on http://localhost:${PORT}`);
-  console.log(`[approval-server] Operator auth: Authorization: Bearer <HITL_OPERATOR_TOKEN>`);
-  console.log(`[approval-server] Endpoints:`);
-  console.log(`  GET  /health     — Health check`);
-  console.log(`  GET  /pending    — List pending approvals`);
-  console.log(`  POST /approve/:id — Approve a request (Bearer token required)`);
-});
+const shouldAutostart = process.env["APPROVAL_SERVER_AUTOSTART"] !== "false";
+if (shouldAutostart) {
+  const server = createApprovalServer();
+  server.listen(PORT, () => {
+    console.log(`[approval-server] Listening on http://localhost:${PORT}`);
+    console.log(`[approval-server] Operator auth: Authorization: Bearer <HITL_OPERATOR_TOKEN>`);
+    console.log(`[approval-server] Endpoints:`);
+    console.log(`  GET  /health     — Health check`);
+    console.log(`  GET  /pending    — List pending approvals`);
+    console.log(`  POST /approve/:id — Approve a request (Bearer token required)`);
+  });
+}

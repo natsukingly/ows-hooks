@@ -4,7 +4,7 @@ import path from "node:path";
 let db: Database.Database | null = null;
 let currentPath: string | null = null;
 
-function resolveDbPath(): string {
+export function resolveDbPath(): string {
   return process.env["OWS_PP_AUDIT_DB"] ?? path.join(process.cwd(), "audit.db");
 }
 

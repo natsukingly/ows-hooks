@@ -1,11 +1,13 @@
 import type Database from "better-sqlite3";
 import type { AuditEntry } from "./types.js";
-import { getSharedDb, closeDb } from "./db.js";
+import { getSharedDb, closeDb, resolveDbPath } from "./db.js";
 
 let initialized = false;
+let initializedDbPath: string | null = null;
 
 function ensureTable(): void {
-  if (initialized) return;
+  const dbPath = resolveDbPath();
+  if (initialized && initializedDbPath === dbPath) return;
   const db = getSharedDb();
 
   // Create table
@@ -43,17 +45,21 @@ function ensureTable(): void {
   `);
 
   initialized = true;
+  initializedDbPath = dbPath;
 }
 
 let cachedInsert: Database.Statement | null = null;
+let cachedInsertDbPath: string | null = null;
 
 export function recordAudit(entry: AuditEntry): void {
   ensureTable();
-  if (!cachedInsert) {
+  const dbPath = resolveDbPath();
+  if (!cachedInsert || cachedInsertDbPath !== dbPath) {
     cachedInsert = getSharedDb().prepare(`
       INSERT INTO audit_log (timestamp, agent_id, wallet_id, chain_id, tx_to, tx_value, policy_name, result, reason, context_hash)
       VALUES (@timestamp, @agent_id, @wallet_id, @chain_id, @tx_to, @tx_value, @policy_name, @result, @reason, @context_hash)
     `);
+    cachedInsertDbPath = dbPath;
   }
   cachedInsert.run(entry);
 }
@@ -67,6 +73,8 @@ export function getAuditLog(): AuditEntry[] {
 /** Close the DB connection */
 export function closeAudit(): void {
   cachedInsert = null;
+  cachedInsertDbPath = null;
   initialized = false;
+  initializedDbPath = null;
   closeDb();
 }
