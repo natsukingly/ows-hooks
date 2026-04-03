@@ -24,18 +24,27 @@ import {
  */
 
 const PORT = Number(process.env["APPROVAL_SERVER_PORT"] ?? "3001");
+const OPERATOR_TOKEN = process.env["HITL_OPERATOR_TOKEN"];
 
-function getOperatorToken(): string {
-  const token = process.env["HITL_OPERATOR_TOKEN"];
-  if (!token) {
-    throw new Error("HITL_OPERATOR_TOKEN is required for approval-server");
+if (!OPERATOR_TOKEN) {
+  throw new Error("HITL_OPERATOR_TOKEN is required for approval-server");
+}
+
+// Fail fast if HITL_HMAC_SECRET is missing/insecure.
+generateApprovalToken("startup-check");
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
   }
-  return token;
 }
 
 function isAuthorized(req: http.IncomingMessage): boolean {
   const authHeader = req.headers["authorization"] ?? "";
-  const expected = `Bearer ${getOperatorToken()}`;
+  const expected = `Bearer ${OPERATOR_TOKEN}`;
   if (authHeader.length !== expected.length) return false;
   return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
 }
@@ -50,7 +59,7 @@ function parseBody(req: http.IncomingMessage): Promise<string> {
       totalBytes += chunk.length;
       if (totalBytes > MAX_BODY_BYTES) {
         req.destroy();
-        reject(new Error("Request body too large"));
+        reject(new HttpError(413, "Request body too large"));
         return;
       }
       chunks.push(chunk);
@@ -112,16 +121,36 @@ const server = http.createServer(async (req, res) => {
 
     // Parse optional body for approved_by
     let approvedBy = "operator";
+    let body = "";
     try {
-      const body = await parseBody(req);
-      if (body) {
-        const parsed = JSON.parse(body);
-        if (typeof parsed.approved_by === "string" && parsed.approved_by.length <= 256) {
-          approvedBy = parsed.approved_by;
-        }
+      body = await parseBody(req);
+    } catch (err) {
+      if (err instanceof HttpError) {
+        json(res, err.status, { error: err.message });
+        return;
       }
-    } catch {
-      // Body is optional
+      json(res, 400, { error: "Invalid request body" });
+      return;
+    }
+
+    if (body) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        json(res, 400, { error: "Invalid JSON body" });
+        return;
+      }
+
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "approved_by" in parsed &&
+        typeof (parsed as { approved_by: unknown }).approved_by === "string" &&
+        (parsed as { approved_by: string }).approved_by.length <= 256
+      ) {
+        approvedBy = (parsed as { approved_by: string }).approved_by;
+      }
     }
 
     const success = approveRequest(approvalId, approvedBy);

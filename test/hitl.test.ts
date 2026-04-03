@@ -15,7 +15,7 @@ import type { PolicyContext, ChainResults } from "../src/types.js";
 import { getSharedDb } from "../src/db.js";
 
 process.env["ERC8004_MOCK"] = "true";
-process.env["HITL_HMAC_SECRET"] = "test-secret";
+process.env["HITL_HMAC_SECRET"] = "test-hmac-secret";
 process.env["HITL_APPROVAL_TTL_MINUTES"] = "15";
 
 function makeCtx(overrides: {
