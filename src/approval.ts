@@ -1,14 +1,22 @@
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSharedDb } from "./db.js";
 
 // ── Configuration ──
 
 const TTL_MINUTES = Number(process.env["HITL_APPROVAL_TTL_MINUTES"] ?? "15");
-const HMAC_SECRET = process.env["HITL_HMAC_SECRET"] ?? "dev-secret-change-in-production";
 const MAX_RETRIES = 3;
 
-// SECURITY: In production, HITL_HMAC_SECRET must be set to a strong random value.
-// The default "dev-secret-change-in-production" is only for local development/demo.
+function getHmacSecret(): string {
+  const secret = process.env["HITL_HMAC_SECRET"];
+  if (!secret || secret === "dev-secret-change-in-production") {
+    throw new Error(
+      "HITL_HMAC_SECRET must be set to a strong random value (default/insecure value is not allowed)",
+    );
+  }
+  return secret;
+}
+
+// SECURITY: HITL_HMAC_SECRET is mandatory and insecure/default values are rejected.
 
 // ── Types ──
 
@@ -87,7 +95,7 @@ function computeHmac(fields: {
   chain_id: string;
 }): string {
   const payload = `${fields.id}:${fields.tx_hash}:${fields.agent_id}:${fields.tx_to}:${fields.tx_value}:${fields.chain_id}`;
-  return createHmac("sha256", HMAC_SECRET).update(payload).digest("hex");
+  return createHmac("sha256", getHmacSecret()).update(payload).digest("hex");
 }
 
 export function verifyHmac(record: ApprovalRecord): boolean {
@@ -99,7 +107,10 @@ export function verifyHmac(record: ApprovalRecord): boolean {
     tx_value: record.tx_value,
     chain_id: record.chain_id,
   });
-  return expected === record.hmac;
+  const expectedBuf = Buffer.from(expected, "hex");
+  const actualBuf = Buffer.from(record.hmac, "hex");
+  if (expectedBuf.length !== actualBuf.length) return false;
+  return timingSafeEqual(expectedBuf, actualBuf);
 }
 
 // ── Transaction Hash ──
@@ -195,6 +206,45 @@ export function findValidApproval(params: {
   return record;
 }
 
+/**
+ * Atomically consume a valid approval exactly once.
+ * Returns the consumed approval record if successful, otherwise null.
+ */
+export function consumeValidApproval(params: {
+  agent_id: string;
+  tx_to: string;
+  tx_value: string;
+  chain_id: string;
+}): ApprovalRecord | null {
+  ensureTable();
+  const db = getSharedDb();
+  const tx_hash = computeTxHash(params.tx_to, params.tx_value, params.chain_id);
+  const now = new Date().toISOString();
+
+  const consume = db.transaction((): ApprovalRecord | null => {
+    const record = db.prepare(`
+      SELECT * FROM approvals
+      WHERE tx_hash = ? AND agent_id = ? AND status = 'approved' AND expires_at > ?
+      ORDER BY approved_at DESC LIMIT 1
+    `).get(tx_hash, params.agent_id, now) as ApprovalRecord | undefined;
+
+    if (!record) return null;
+    if (!verifyHmac(record)) {
+      console.error(`[hitl] SECURITY WARNING: HMAC verification failed for approval ${record.id}`);
+      return null;
+    }
+
+    const result = db.prepare(
+      "UPDATE approvals SET status = 'used' WHERE id = ? AND status = 'approved'",
+    ).run(record.id);
+
+    if (result.changes !== 1) return null;
+    return { ...record, status: "used" };
+  });
+
+  return consume();
+}
+
 /** Find an existing pending approval to avoid creating duplicates */
 export function findPendingApproval(params: {
   agent_id: string;
@@ -270,11 +320,14 @@ export function listPending(): ApprovalRecord[] {
 // Anyone with access to HITL_HMAC_SECRET can generate valid tokens.
 // FUTURE: Use asymmetric keys or integrate with an identity provider for approver verification.
 export function generateApprovalToken(approvalId: string): string {
-  return createHmac("sha256", HMAC_SECRET).update(`approve:${approvalId}`).digest("hex");
+  return createHmac("sha256", getHmacSecret()).update(`approve:${approvalId}`).digest("hex");
 }
 
 /** Verify an API approval token */
 export function verifyApprovalToken(approvalId: string, token: string): boolean {
   const expected = generateApprovalToken(approvalId);
-  return expected === token;
+  const expectedBuf = Buffer.from(expected, "hex");
+  const actualBuf = Buffer.from(token, "hex");
+  if (expectedBuf.length !== actualBuf.length) return false;
+  return timingSafeEqual(expectedBuf, actualBuf);
 }

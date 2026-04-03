@@ -1,10 +1,8 @@
 import type { Policy, PolicyContext, PolicyResult, ChainResults } from "../types.js";
 import {
-  findValidApproval,
+  consumeValidApproval,
   findPendingApproval,
   createApproval,
-  markAsUsed,
-  generateApprovalToken,
 } from "../approval.js";
 
 /**
@@ -73,10 +71,8 @@ export const hitlApproval: Policy = {
     };
 
     // Check for existing valid (approved) approval
-    const validApproval = findValidApproval(approvalParams);
+    const validApproval = consumeValidApproval(approvalParams);
     if (validApproval) {
-      // SECURITY: Mark as used immediately to prevent replay
-      markAsUsed(validApproval.id);
       return {
         allow: true,
         reason: `Approved by ${validApproval.approved_by ?? "unknown"} (approval: ${validApproval.id})`,
@@ -86,20 +82,18 @@ export const hitlApproval: Policy = {
     // Check for existing pending approval (avoid duplicates)
     const pending = findPendingApproval(approvalParams);
     if (pending) {
-      const token = generateApprovalToken(pending.id);
       return {
         allow: false,
-        reason: `PENDING_APPROVAL:${pending.id}:${token} — Waiting for human approval. Retry after approval.`,
+        reason: `PENDING_APPROVAL:${pending.id} — Waiting for human approval. Retry after approval.`,
       };
     }
 
     // No approval exists → create a new pending request
     const newApproval = createApproval(approvalParams);
-    const token = generateApprovalToken(newApproval.id);
 
     return {
       allow: false,
-      reason: `PENDING_APPROVAL:${newApproval.id}:${token} — High-value transaction (${txValue} wei) requires human approval. Approve via: POST /approve/${newApproval.id}`,
+      reason: `PENDING_APPROVAL:${newApproval.id} — High-value transaction (${txValue} wei) requires human approval. Approve via approval server by operator.`,
     };
   },
 };

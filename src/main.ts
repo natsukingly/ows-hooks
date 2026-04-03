@@ -3,10 +3,6 @@ import { closeAudit } from "./audit.js";
 import { loadConfig, resolveConfig } from "./config.js";
 import type { PolicyContext, PolicyResult, PostSignHook, OnDenyHook } from "./types.js";
 
-// Load config from ows-hooks.json (falls back to defaults if file is absent)
-const config = loadConfig();
-const { policies, postSignHooks, onDenyHooks } = resolveConfig(config);
-
 async function main(): Promise<void> {
   // Read PolicyContext from stdin
   const chunks: Buffer[] = [];
@@ -35,6 +31,10 @@ async function main(): Promise<void> {
   }
 
   try {
+    // Load config from ows-hooks.json (falls back to defaults if file is absent)
+    const config = loadConfig();
+    const { policies, postSignHooks, onDenyHooks } = resolveConfig(config);
+
     // ── pre-sign: policy evaluation ──
     const result = await evaluatePolicies([...policies], ctx);
 

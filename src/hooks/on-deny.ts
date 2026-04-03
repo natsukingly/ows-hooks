@@ -65,15 +65,16 @@ const conditionalRetryGuidance: OnDenyHook = async (ctx, result) => {
   const reason = result.reason ?? "";
 
   if (reason.includes("PENDING_APPROVAL")) {
-    // Extract approval ID and token from reason: "PENDING_APPROVAL:<id>:<token> — ..."
-    const match = reason.match(/PENDING_APPROVAL:([a-f0-9-]+):([a-f0-9]+)/);
+    // Extract approval ID from reason: "PENDING_APPROVAL:<id> — ..."
+    const match = reason.match(/PENDING_APPROVAL:([a-f0-9-]+)/);
     if (match) {
-      const [, approvalId, token] = match;
+      const [, approvalId] = match;
       const port = process.env["APPROVAL_SERVER_PORT"] ?? "3001";
       console.error(`[on-deny] HITL: Human approval required for high-value transaction`);
       console.error(`[on-deny] HITL: Approve via:`);
+      console.error(`[on-deny]   export HITL_OPERATOR_TOKEN='<operator-token>'`);
       console.error(`[on-deny]   curl -X POST http://localhost:${port}/approve/${approvalId} \\`);
-      console.error(`[on-deny]     -H "Authorization: Bearer ${token}" \\`);
+      console.error(`[on-deny]     -H "Authorization: Bearer $HITL_OPERATOR_TOKEN" \\`);
       console.error(`[on-deny]     -H "Content-Type: application/json" \\`);
       console.error(`[on-deny]     -d '{"approved_by": "your-name"}'`);
       console.error(`[on-deny] HITL: Then retry the same transaction.`);

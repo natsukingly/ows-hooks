@@ -189,6 +189,7 @@ describe("HITL Policy", () => {
     const result = await hitlApproval.evaluate(ctx, chainResults);
     expect(result.allow).toBe(false);
     expect(result.reason).toContain("PENDING_APPROVAL");
+    expect(result.reason).not.toMatch(/PENDING_APPROVAL:[a-f0-9-]+:[a-f0-9]+/);
   });
 
   it("allows after human approval (full flow)", async () => {
@@ -205,7 +206,7 @@ describe("HITL Policy", () => {
     expect(firstResult.allow).toBe(false);
 
     // Extract approval ID from reason
-    const match = firstResult.reason!.match(/PENDING_APPROVAL:([a-f0-9-]+):/);
+    const match = firstResult.reason!.match(/PENDING_APPROVAL:([a-f0-9-]+)/);
     const approvalId = match![1];
 
     // Human approves
@@ -229,7 +230,7 @@ describe("HITL Policy", () => {
 
     // 1st request → deny
     const firstResult = await hitlApproval.evaluate(ctx, chainResults);
-    const match = firstResult.reason!.match(/PENDING_APPROVAL:([a-f0-9-]+):/);
+    const match = firstResult.reason!.match(/PENDING_APPROVAL:([a-f0-9-]+)/);
     const approvalId = match![1];
 
     // Human approves

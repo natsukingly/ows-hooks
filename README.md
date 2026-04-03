@@ -129,13 +129,13 @@ sequenceDiagram
     Hooks->>Hooks: Policies 1-4: all pass
     Hooks->>DB: Check approvals table — none found
     Hooks->>DB: INSERT approval (status=pending, TTL=15min, HMAC signed)
-    Hooks->>OWS: stdout {"allow": false, "reason": "PENDING_APPROVAL:<id>:<token>"}
+    Hooks->>OWS: stdout {"allow": false, "reason": "PENDING_APPROVAL:<id>"}
     Hooks-->>Agent: stderr: curl command to approve
     OWS-->>Agent: Denied
 
     Note over Human,API: Human Approves
-    Human->>API: POST /approve/<id> (Bearer <token>)
-    API->>DB: Verify HMAC token
+    Human->>API: POST /approve/<id> (Bearer <operator-token>)
+    API->>DB: Verify operator authorization
     API->>DB: UPDATE approval (status=approved, approved_by=alice)
     API-->>Human: {"approved": true}
 
@@ -194,7 +194,7 @@ Human:        Approves via CLI or approval-server API
 | Threat | Severity | Mitigation | Status |
 |--------|----------|------------|--------|
 | Approval replay | **HIGH** | tx_hash binds to exact (to, value, chain_id). Single-use. | Implemented |
-| Unauthenticated approval API | **HIGH** | HMAC token required — without HITL_HMAC_SECRET, cannot approve | Implemented |
+| Unauthenticated approval API | **HIGH** | Operator Bearer token (`HITL_OPERATOR_TOKEN`) required for `/pending` and `/approve/:id` | Implemented |
 | TTL too long | **MEDIUM** | Default 15 min, configurable via HITL_APPROVAL_TTL_MINUTES | Implemented |
 | Slack/channel token leak | **MEDIUM** | Channel access = approval access. Restrict channel membership. | Known limitation |
 | No approver identity verification | **MEDIUM** | approved_by field is self-reported, not cryptographically verified | Known limitation |
@@ -219,7 +219,7 @@ Human:        Approves via CLI or approval-server API
 | Policy config tampering | Config files are outside agent's API key scope. |
 | Timeout exploit | Deny-by-default: timeout (5s) or error → always Deny. |
 | Audit log tampering | SQLite triggers prohibit DELETE/UPDATE (append-only). |
-| Approval forgery | HMAC-SHA256 token required. Without secret, cannot approve. |
+| Approval forgery | Operator Bearer auth + HMAC integrity checks on approvals. |
 
 ## Configuration
 
@@ -315,14 +315,14 @@ For production HITL flows, run the approval server as a separate process:
 
 ```bash
 # Start the approval server
-HITL_HMAC_SECRET=your-strong-secret node dist/approval-server.js
+HITL_HMAC_SECRET=your-strong-secret HITL_OPERATOR_TOKEN=your-operator-token node dist/approval-server.js
 
 # List pending approvals
-curl http://localhost:3001/pending
+curl -H "Authorization: Bearer your-operator-token" http://localhost:3001/pending
 
-# Approve a request (token from deny reason or /pending response)
+# Approve a request
 curl -X POST http://localhost:3001/approve/<id> \
-  -H "Authorization: Bearer <token>" \
+  -H "Authorization: Bearer your-operator-token" \
   -H "Content-Type: application/json" \
   -d '{"approved_by": "alice"}'
 ```
@@ -330,7 +330,7 @@ curl -X POST http://localhost:3001/approve/<id> \
 Or use the CLI:
 
 ```bash
-bash scripts/approve.sh <approval_id> <token> alice
+HITL_OPERATOR_TOKEN=your-operator-token bash scripts/approve.sh <approval_id> alice
 ```
 
 ## Environment Variables
@@ -343,7 +343,8 @@ bash scripts/approve.sh <approval_id> <token> alice
 | `ERC8004_MIN_REPUTATION` | Minimum reputation to pass | `50` |
 | `BASE_SEPOLIA_RPC_URL` | Base Sepolia RPC endpoint | `https://sepolia.base.org` |
 | `OWS_PP_AUDIT_DB` | Audit/approval database path | `./audit.db` |
-| `HITL_HMAC_SECRET` | HMAC secret for approval tokens | `dev-secret-change-in-production` |
+| `HITL_HMAC_SECRET` | HMAC secret for approval integrity/tokens (required) | — |
+| `HITL_OPERATOR_TOKEN` | Bearer token for approval-server operator endpoints (required) | — |
 | `HITL_APPROVAL_TTL_MINUTES` | Approval expiry time | `15` |
 | `HITL_VALUE_THRESHOLD` | Value threshold for HITL (wei) | `1000000000000000000` (1 ETH) |
 | `HITL_CRITICAL_THRESHOLD` | Critical value threshold (wei) | `5000000000000000000` (5 ETH) |

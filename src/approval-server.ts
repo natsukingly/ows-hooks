@@ -15,14 +15,27 @@ import {
  *   GET  /pending       — List pending approvals
  *   GET  /health        — Health check
  *
- * SECURITY: The Bearer token is an HMAC derived from the approval ID and HITL_HMAC_SECRET.
- * Without the secret, an attacker cannot generate valid tokens.
+ * SECURITY: Operator endpoints require a dedicated Bearer token (HITL_OPERATOR_TOKEN).
+ * Optional x-approval-token adds per-approval verification as defense in depth.
  *
  * KNOWN LIMITATION: No TLS. In production, place behind a reverse proxy with TLS termination.
  * KNOWN LIMITATION: No rate limiting. In production, add rate limiting to prevent brute-force.
  */
 
 const PORT = Number(process.env["APPROVAL_SERVER_PORT"] ?? "3001");
+
+function getOperatorToken(): string {
+  const token = process.env["HITL_OPERATOR_TOKEN"];
+  if (!token) {
+    throw new Error("HITL_OPERATOR_TOKEN is required for approval-server");
+  }
+  return token;
+}
+
+function isAuthorized(req: http.IncomingMessage): boolean {
+  const authHeader = req.headers["authorization"];
+  return authHeader === `Bearer ${getOperatorToken()}`;
+}
 
 function parseBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -49,6 +62,10 @@ const server = http.createServer(async (req, res) => {
 
   // GET /pending
   if (req.method === "GET" && url.pathname === "/pending") {
+    if (!isAuthorized(req)) {
+      json(res, 401, { error: "Unauthorized" });
+      return;
+    }
     const pending = listPending();
     // Include approval tokens so the operator can use them
     const withTokens = pending.map((p) => ({
@@ -62,17 +79,19 @@ const server = http.createServer(async (req, res) => {
   // POST /approve/:id
   const approveMatch = url.pathname.match(/^\/approve\/([a-f0-9-]+)$/);
   if (req.method === "POST" && approveMatch) {
-    const approvalId = approveMatch[1];
-
-    // SECURITY: Verify Bearer token
-    const authHeader = req.headers["authorization"];
-    if (!authHeader?.startsWith("Bearer ")) {
-      json(res, 401, { error: "Missing Authorization: Bearer <token>" });
+    if (!isAuthorized(req)) {
+      json(res, 401, { error: "Unauthorized" });
       return;
     }
 
-    const token = authHeader.slice(7);
-    if (!verifyApprovalToken(approvalId, token)) {
+    const approvalId = approveMatch[1];
+
+    // Optional per-approval token (defense in depth)
+    const approvalTokenHeader = req.headers["x-approval-token"];
+    const approvalToken = Array.isArray(approvalTokenHeader)
+      ? approvalTokenHeader[0]
+      : approvalTokenHeader;
+    if (approvalToken && !verifyApprovalToken(approvalId, approvalToken)) {
       json(res, 403, { error: "Invalid approval token" });
       return;
     }
@@ -103,6 +122,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[approval-server] Listening on http://localhost:${PORT}`);
+  console.log(`[approval-server] Operator auth: Authorization: Bearer <HITL_OPERATOR_TOKEN>`);
   console.log(`[approval-server] Endpoints:`);
   console.log(`  GET  /health     — Health check`);
   console.log(`  GET  /pending    — List pending approvals`);

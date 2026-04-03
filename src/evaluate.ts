@@ -2,6 +2,20 @@ import type { Policy, PolicyContext, PolicyResult, ChainResults } from "./types.
 import { recordAudit } from "./audit.js";
 import { createHash } from "node:crypto";
 
+const POLICY_TIMEOUT_MS = Number(process.env["POLICY_TIMEOUT_MS"] ?? "5000");
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, policyName: string): Promise<T> {
+  if (timeoutMs <= 0) return promise;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Policy "${policyName}" timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
 /**
  * Evaluates policies sequentially.
  * - Any single deny → short-circuit the entire evaluation to deny immediately
@@ -21,7 +35,7 @@ export async function evaluatePolicies(
     let result: PolicyResult;
 
     try {
-      result = await policy.evaluate(ctx, chainResults);
+      result = await withTimeout(policy.evaluate(ctx, chainResults), POLICY_TIMEOUT_MS, policy.name);
     } catch (err) {
       result = {
         allow: false,
