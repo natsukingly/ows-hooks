@@ -28,26 +28,26 @@ Agent → OWS (ows sign) → Policy Engine → executable (this project)
                                               └── Audit Log (SQLite, append-only)
 ```
 
-ポリシー評価は **署名の直前・秘密鍵の復号前** に実行される。Deny されたらキーに一切触れずに拒否。エージェントはこのフローをバイパスできない。
+Policy evaluation runs **before signing, before private key decryption**. If denied, the key is never touched. The agent cannot bypass this flow.
 
 ## Policies
 
 | Policy | Type | Description |
 |--------|------|-------------|
-| **KYC Check** | Mock | 送金先が KYC 済みかを外部 API/DB に照会 |
-| **AML Check** | Mock | 送金先が制裁リストに該当しないかチェック |
-| **ERC-8004 Agent ID** | On-chain | エージェントの ERC-8004 Identity Registry 登録・レピュテーション検証 |
-| **Policy Chaining** | Dynamic | 前段ポリシーの結果に基づいてルールを動的変更 |
+| **KYC Check** | Mock | Verifies recipient KYC status via external API/DB |
+| **AML Check** | Mock | Checks recipient against sanctions lists |
+| **ERC-8004 Agent ID** | On-chain | Verifies agent registration and reputation in ERC-8004 Identity Registry |
+| **Policy Chaining** | Dynamic | Dynamically adjusts rules based on upstream policy results |
 
-### Policy Chaining の動作
+### Policy Chaining Behavior
 
 ```
-ERC-8004 reputation ≥ 80 → 高額送金も許可
-ERC-8004 reputation 50-79 → 低額のみ許可、高額(>1 ETH)はブロック
-ERC-8004 reputation < 50 → 全送金ブロック（ERC-8004 ポリシーで先に弾かれる）
+ERC-8004 reputation ≥ 80 → High-value transfers allowed
+ERC-8004 reputation 50-79 → Low-value only, high-value (>1 ETH) blocked
+ERC-8004 reputation < 50 → All transfers blocked (caught by ERC-8004 policy first)
 ```
 
-同じトランザクションでも、エージェントのレピュテーションで結果が変わる。ビルトインの静的ルールでは不可能。
+The same transaction can produce different outcomes depending on the agent's reputation. This is impossible with built-in static rules.
 
 ## Security: Zero Trust for Agents
 
