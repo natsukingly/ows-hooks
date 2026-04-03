@@ -1,0 +1,21 @@
+{
+  "pre-sign": [
+    "tx-safety",
+    "aml-check",
+    "erc8004-agent",
+    "policy-chain",
+    "hitl-approval",
+    "x402-trust"
+  ],
+  "post-sign": [
+    "stderr-log",
+    "external-audit",
+    "slack-notify"
+  ],
+  "on-deny": [
+    "stderr-log",
+    "retry-guidance",
+    "alert-webhook",
+    "slack-alert"
+  ]
+}

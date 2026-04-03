@@ -67,8 +67,10 @@ const demoLog: PostSignHook = async (ctx, _result) => {
   );
 };
 
-export const postSignHooks: PostSignHook[] = [
-  demoLog,
-  externalAuditLog,
-  slackNotification,
-];
+export const postSignHookRegistry = new Map<string, PostSignHook>([
+  ["stderr-log", demoLog],
+  ["external-audit", externalAuditLog],
+  ["slack-notify", slackNotification],
+]);
+
+export const postSignHooks: PostSignHook[] = [...postSignHookRegistry.values()];

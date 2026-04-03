@@ -1,24 +1,11 @@
 import { evaluatePolicies } from "./evaluate.js";
 import { closeAudit } from "./audit.js";
-import { txSafety } from "./policies/tx-safety.js";
-import { amlCheck } from "./policies/aml-check.js";
-import { erc8004Agent } from "./policies/erc8004-agent.js";
-import { policyChain } from "./policies/policy-chain.js";
-import { x402Trust } from "./policies/x402-trust.js";
-import { hitlApproval } from "./policies/hitl-approval.js";
-import { postSignHooks } from "./hooks/post-sign.js";
-import { onDenyHooks } from "./hooks/on-deny.js";
-import type { Policy, PolicyContext, PolicyResult, PostSignHook, OnDenyHook } from "./types.js";
+import { loadConfig, resolveConfig } from "./config.js";
+import type { PolicyContext, PolicyResult, PostSignHook, OnDenyHook } from "./types.js";
 
-// Policy registration order = evaluation order (fixed at startup, cannot be changed)
-const policies: readonly Policy[] = Object.freeze([
-  txSafety,
-  amlCheck,
-  erc8004Agent,
-  policyChain,
-  hitlApproval,
-  x402Trust,
-]);
+// Load config from ows-hooks.json (falls back to defaults if file is absent)
+const config = loadConfig();
+const { policies, postSignHooks, onDenyHooks } = resolveConfig(config);
 
 async function main(): Promise<void> {
   // Read PolicyContext from stdin

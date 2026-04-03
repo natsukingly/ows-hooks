@@ -221,6 +221,63 @@ Human:        Approves via CLI or approval-server API
 | Audit log tampering | SQLite triggers prohibit DELETE/UPDATE (append-only). |
 | Approval forgery | HMAC-SHA256 token required. Without secret, cannot approve. |
 
+## Configuration
+
+Policies and hooks are configured via `ows-hooks.json` in the project root. This file controls which policies run, in what order, and which hooks fire on allow/deny.
+
+```jsonc
+// ows-hooks.json
+{
+  "pre-sign": [
+    "tx-safety",
+    "aml-check",
+    "erc8004-agent",
+    "policy-chain",
+    "hitl-approval",
+    "x402-trust"
+  ],
+  "post-sign": [
+    "stderr-log",
+    "external-audit",
+    "slack-notify"
+  ],
+  "on-deny": [
+    "stderr-log",
+    "retry-guidance",
+    "alert-webhook",
+    "slack-alert"
+  ]
+}
+```
+
+- **`pre-sign`** — Policy hooks evaluated before signing. Array order = evaluation order. First deny short-circuits.
+- **`post-sign`** — Hooks that fire after an approved signing (non-blocking).
+- **`on-deny`** — Hooks that fire after a denied signing (non-blocking).
+- If `ows-hooks.json` is absent, all hooks run in the default order.
+
+### Available Policies
+
+| Name | Description |
+|------|-------------|
+| `tx-safety` | Address book whitelist, risk scoring, address poisoning detection |
+| `kyc-check` | KYC verification (mock) |
+| `aml-check` | Sanctions list check (mock) |
+| `erc8004-agent` | ERC-8004 agent identity and reputation (on-chain) |
+| `policy-chain` | Dynamic rules based on upstream policy results |
+| `hitl-approval` | Human-in-the-loop approval for critical transactions |
+| `x402-trust` | Trust score verification for x402 service payments |
+
+### Available Hooks
+
+| Name | Type | Description |
+|------|------|-------------|
+| `stderr-log` | post-sign / on-deny | Print summary to stderr |
+| `external-audit` | post-sign | POST signing event to webhook |
+| `slack-notify` | post-sign | Slack notification for high-value tx |
+| `retry-guidance` | on-deny | Print retry hints to stderr |
+| `alert-webhook` | on-deny | POST denial event to webhook |
+| `slack-alert` | on-deny | Slack alert for denied tx |
+
 ## Setup
 
 ```bash

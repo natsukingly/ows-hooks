@@ -100,9 +100,11 @@ const demoLog: OnDenyHook = async (ctx, result) => {
   );
 };
 
-export const onDenyHooks: OnDenyHook[] = [
-  demoLog,
-  conditionalRetryGuidance,
-  alertOnDeny,
-  slackAlertOnDeny,
-];
+export const onDenyHookRegistry = new Map<string, OnDenyHook>([
+  ["stderr-log", demoLog],
+  ["retry-guidance", conditionalRetryGuidance],
+  ["alert-webhook", alertOnDeny],
+  ["slack-alert", slackAlertOnDeny],
+]);
+
+export const onDenyHooks: OnDenyHook[] = [...onDenyHookRegistry.values()];
