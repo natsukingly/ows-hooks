@@ -1,0 +1,20 @@
+{
+  "trusted_addresses": {
+    "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD0C": {
+      "label": "Treasury",
+      "added_at": "2026-01-15T00:00:00Z"
+    },
+    "0x1234567890abcdef1234567890abcdef12345678": {
+      "label": "Partner: Acme Corp",
+      "added_at": "2026-02-01T00:00:00Z"
+    },
+    "0x7d9d1821d15B9e0b8Ab98A058361233E255E405D": {
+      "label": "Heurist x402 Service",
+      "added_at": "2026-03-20T00:00:00Z"
+    },
+    "0x1111111111111111111111111111111111111111": {
+      "label": "Verified AI Model API",
+      "added_at": "2026-03-25T00:00:00Z"
+    }
+  }
+}

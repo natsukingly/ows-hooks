@@ -1,0 +1,31 @@
+{
+  "services": {
+    "0x7d9d1821d15B9e0b8Ab98A058361233E255E405D": {
+      "name": "Heurist Twitter Intelligence",
+      "trust_score": 85,
+      "verified": true,
+      "category": "data-intelligence"
+    },
+    "0x1111111111111111111111111111111111111111": {
+      "name": "Verified AI Model API",
+      "trust_score": 92,
+      "verified": true,
+      "category": "ai-inference"
+    },
+    "0x2222222222222222222222222222222222222222": {
+      "name": "Unverified Scraping Service",
+      "trust_score": 15,
+      "verified": false,
+      "category": "unknown"
+    },
+    "0x3333333333333333333333333333333333333333": {
+      "name": "New Service (no history)",
+      "trust_score": 0,
+      "verified": false,
+      "category": "unknown"
+    }
+  },
+  "min_trust_score": 30,
+  "require_verified_for_high_value": true,
+  "high_value_threshold": "1000000000000000000"
+}

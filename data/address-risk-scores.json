@@ -1,0 +1,14 @@
+{
+  "_comment": "Mock GoPlus-style address risk scores. In production, query GoPlus x402 API.",
+  "scores": {
+    "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD0C": { "risk": 0, "label": "clean" },
+    "0x1234567890abcdef1234567890abcdef12345678": { "risk": 0, "label": "clean" },
+    "0x7d9d1821d15B9e0b8Ab98A058361233E255E405D": { "risk": 5, "label": "clean" },
+    "0x1111111111111111111111111111111111111111": { "risk": 0, "label": "clean" },
+    "0x2222222222222222222222222222222222222222": { "risk": 60, "label": "suspicious" },
+    "0x9999999999999999999999999999999999999999": { "risk": 85, "label": "high-risk" },
+    "0xDEAD000000000000000000000000000000000000": { "risk": 100, "label": "malicious" },
+    "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD00": { "risk": 95, "label": "poisoned-address" }
+  },
+  "max_risk_score": 50
+}
