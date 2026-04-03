@@ -6,6 +6,8 @@ A signing hooks framework for the Open Wallet Standard. Evaluates AI agent signi
 
 **AI agents get hacked. Prompt injection hijacks them. But OWS Hooks doesn't use an LLM — it can't be tricked. It runs in an independent process, sees no prompts, no context. That's Zero Trust for Agents.**
 
+https://github.com/natsukingly/ows-hooks/raw/main/demo/pitch-video.mp4
+
 ## Challenges Addressed
 
 | Challenge | How |
