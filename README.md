@@ -42,6 +42,122 @@ Policy evaluation runs **before signing, before private key decryption**. If den
 | **post-sign** | ✅ Implemented | Webhook notifications, Slack alerts for high-value transactions |
 | **on-deny** | ✅ Implemented | Alert webhooks, Slack alerts, retry guidance, HITL approval instructions |
 
+### Sequence: Allow Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant OWS
+    participant Hooks as OWS Hooks (this project)
+    participant Chain as Base Sepolia
+    participant DB as SQLite (audit.db)
+    participant Slack
+    participant Webhook as External Webhook
+
+    Agent->>OWS: ows sign (transaction)
+    OWS->>Hooks: stdin (PolicyContext JSON)
+
+    Note over Hooks: pre-sign: Policy Evaluation
+    Hooks->>Hooks: 1. Tx Safety (address book, risk score)
+    Hooks->>DB: audit log (tx-safety: allow)
+    Hooks->>Hooks: 2. AML Check (sanctions list)
+    Hooks->>DB: audit log (aml-check: allow)
+    Hooks->>Chain: 3. ERC-8004 ownerOf() + getSummary()
+    Chain-->>Hooks: registered=true, reputation=90
+    Hooks->>DB: audit log (erc8004-agent: allow)
+    Hooks->>Hooks: 4. Policy Chain (rep ≥ 80 → pass)
+    Hooks->>DB: audit log (policy-chain: allow)
+    Hooks->>Hooks: 5. HITL Approval (value ≤ threshold → skip)
+    Hooks->>DB: audit log (hitl-approval: allow)
+    Hooks->>Hooks: 6. x402 Trust (not x402 service → skip)
+    Hooks->>DB: audit log (x402-trust: allow)
+
+    Hooks->>OWS: stdout {"allow": true}
+
+    Note over Hooks: post-sign: Non-blocking Hooks
+    Hooks->>Webhook: POST signing_approved event
+    Hooks->>Slack: High-value notification (if ≥ 1 ETH)
+
+    OWS->>OWS: Decrypt private key & sign
+    OWS-->>Agent: Signed transaction
+```
+
+### Sequence: Deny Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant OWS
+    participant Hooks as OWS Hooks (this project)
+    participant DB as SQLite (audit.db)
+    participant Slack
+
+    Agent->>OWS: ows sign (transaction)
+    OWS->>Hooks: stdin (PolicyContext JSON)
+
+    Note over Hooks: pre-sign: Policy Evaluation
+    Hooks->>Hooks: 1. Tx Safety
+    Hooks->>DB: audit log (tx-safety: allow)
+    Hooks->>Hooks: 2. AML Check — recipient on sanctions list!
+    Hooks->>DB: audit log (aml-check: deny)
+
+    Note over Hooks: Short-circuit: first deny stops all evaluation
+
+    Hooks->>OWS: stdout {"allow": false, "reason": "sanctions list"}
+
+    Note over Hooks: on-deny: Non-blocking Hooks
+    Hooks->>Slack: 🚫 Signing DENIED alert
+    Hooks-->>Agent: stderr: "NO RETRY: address on sanctions list"
+
+    OWS-->>Agent: Denied (private key never touched)
+```
+
+### Sequence: HITL Approval Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant OWS
+    participant Hooks as OWS Hooks (this project)
+    participant DB as SQLite (audit.db)
+    participant Human
+    participant API as Approval Server
+
+    Note over Agent,API: 1st Request — Denied, Pending Approval
+    Agent->>OWS: ows sign (10 ETH, critical value)
+    OWS->>Hooks: stdin (PolicyContext)
+    Hooks->>Hooks: Policies 1-4: all pass
+    Hooks->>DB: Check approvals table — none found
+    Hooks->>DB: INSERT approval (status=pending, TTL=15min, HMAC signed)
+    Hooks->>OWS: stdout {"allow": false, "reason": "PENDING_APPROVAL:<id>:<token>"}
+    Hooks-->>Agent: stderr: curl command to approve
+    OWS-->>Agent: Denied
+
+    Note over Human,API: Human Approves
+    Human->>API: POST /approve/<id> (Bearer <token>)
+    API->>DB: Verify HMAC token
+    API->>DB: UPDATE approval (status=approved, approved_by=alice)
+    API-->>Human: {"approved": true}
+
+    Note over Agent,API: 2nd Request — Approved
+    Agent->>OWS: ows sign (same transaction, retry)
+    OWS->>Hooks: stdin (PolicyContext)
+    Hooks->>Hooks: Policies 1-4: all pass
+    Hooks->>DB: Check approvals — found valid approval (HMAC verified)
+    Hooks->>DB: UPDATE approval (status=used)
+    Hooks->>OWS: stdout {"allow": true, "reason": "Approved by alice"}
+    OWS->>OWS: Decrypt private key & sign
+    OWS-->>Agent: Signed transaction
+
+    Note over Agent,API: 3rd Request — Replay Blocked
+    Agent->>OWS: ows sign (same transaction again)
+    OWS->>Hooks: stdin (PolicyContext)
+    Hooks->>DB: Check approvals — previous one is "used"
+    Hooks->>DB: INSERT new approval (status=pending)
+    Hooks->>OWS: stdout {"allow": false, "reason": "PENDING_APPROVAL"}
+    OWS-->>Agent: Denied (single-use enforcement)
+```
+
 ## Policies
 
 | Policy | Type | Description |
