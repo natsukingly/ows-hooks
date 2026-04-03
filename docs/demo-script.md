@@ -311,7 +311,7 @@ echo '{"chain_id":"eip155:8453","wallet_id":"dev-wallet","api_key_id":"mid-level
 ows policy create --file ows-policy.json
 
 # Create API key with policy attached
-ows key create --name "demo-agent" --wallet dev-wallet --policy programmable-policy
+ows key create --name "demo-agent" --wallet dev-wallet --policy ows-hooks
 
 # Sign with the API key (policy fires automatically)
 OWS_API_KEY=<token> ows sign message --chain ethereum --wallet dev-wallet --message "hello" --json

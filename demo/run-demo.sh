@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# OWS Programmable Policy Demo Script
+# OWS Hooks Demo Script
 # Demonstrates all policies across 5 scenarios
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -46,7 +46,7 @@ run_policy() {
 # ── Reset audit DB ──
 rm -f "$DIR/audit.db"
 
-print_header "OWS Programmable Policy — Demo"
+print_header "OWS Hooks — Demo"
 echo ""
 echo "  5 policies evaluate each signing request in sequence:"
 echo "    1. Tx Safety    — Address book, risk score, address poisoning detection"

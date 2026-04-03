@@ -1,4 +1,4 @@
-# OWS Programmable Policy — Security FAQ & Attack Scenarios
+# OWS OWS Hooks — Security FAQ & Attack Scenarios
 
 ## Attack Scenario Verification Results
 
@@ -35,7 +35,7 @@ DELETE/UPDATE are completely blocked by SQLite triggers.
 |--------|--------|
 | 200KB payload | Processed, but capped by OWS's 5-second timeout |
 
-OWS itself times out after 5 seconds → automatic Deny. No additional size limit is needed on the Programmable Policy side (controlled by OWS).
+OWS itself times out after 5 seconds → automatic Deny. No additional size limit is needed on the OWS Hooks side (controlled by OWS).
 
 ---
 
@@ -43,14 +43,14 @@ OWS itself times out after 5 seconds → automatic Deny. No additional size limi
 
 ### Q: Can prompt injection be used to bypass the policy?
 
-**A: No.** The Programmable Policy does not use an LLM at all. Pure Node.js code receives JSON input and deterministically returns Approve/Deny. Natural language instructions (e.g., "ignore the policy") simply fail JSON parsing and result in a Deny.
+**A: No.** The OWS Hooks does not use an LLM at all. Pure Node.js code receives JSON input and deterministically returns Approve/Deny. Natural language instructions (e.g., "ignore the policy") simply fail JSON parsing and result in a Deny.
 
-More importantly: **The Programmable Policy acts as the last line of defense when an agent is hijacked via prompt injection.**
+More importantly: **The OWS Hooks acts as the last line of defense when an agent is hijacked via prompt injection.**
 
 ```
 Attacker → prompt injection → AI agent (hijacked)
   → agent attempts to send funds to a sanctioned address
-  → OWS sign → Programmable Policy → AML check → Deny ✅
+  → OWS sign → OWS Hooks → AML check → Deny ✅
 ```
 
 No matter how badly the agent's judgment is manipulated, policy evaluation runs in an independent process and is completely unaffected by the agent's prompt or context. This is the core of "Zero Trust for Agents."
@@ -77,7 +77,7 @@ No matter how badly the agent's judgment is manipulated, policy evaluation runs 
 
 ### Q: What happens when the 5-second timeout is exceeded?
 
-**A: OWS automatically returns a Deny.** Even if an external API (such as a KYC service) is slow, OWS's 5-second limit will block the signing. This is OWS core behavior and does not need to be controlled on the Programmable Policy side.
+**A: OWS automatically returns a Deny.** Even if an external API (such as a KYC service) is slow, OWS's 5-second limit will block the signing. This is OWS core behavior and does not need to be controlled on the OWS Hooks side.
 
 ### Q: What happens to an agent with an ERC-8004 reputation of 0?
 

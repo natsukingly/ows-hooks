@@ -9,7 +9,7 @@ import type { Policy, PolicyContext, PolicyResult, ChainResults } from "../types
  * - Reputation is low (<50) → deny all transfers (should already be blocked upstream, but acts as a safety net)
  *
  * This is impossible with built-in static rules.
- * Dynamic dependencies between policies are the core of Programmable Policy.
+ * Dynamic dependencies between policies are the core of OWS Hooks.
  */
 
 const HIGH_REPUTATION_THRESHOLD = 80;

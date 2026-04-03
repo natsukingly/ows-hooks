@@ -1,10 +1,10 @@
-# OWS Programmable Policy
+# OWS Hooks
 
 > OWS Hackathon 2026-04-03
 
 Extends the Open Wallet Standard's executable policy mechanism to let developers write custom signing policies in TypeScript. Evaluates AI agent signing requests in real time using external APIs, on-chain data, and dynamic policy chaining.
 
-**AI agents get hacked. Prompt injection hijacks them. But OWS Programmable Policy doesn't use an LLM — it can't be tricked. It runs in an independent process, sees no prompts, no context. That's Zero Trust for Agents.**
+**AI agents get hacked. Prompt injection hijacks them. But OWS Hooks doesn't use an LLM — it can't be tricked. It runs in an independent process, sees no prompts, no context. That's Zero Trust for Agents.**
 
 ## Challenges Addressed
 
@@ -78,11 +78,11 @@ npm test
 ## Register with OWS
 
 ```bash
-# Register the programmable policy
+# Register the hooks policy
 ows policy create --file ows-policy.json
 
 # Create an API key with the policy attached
-ows key create --name "my-agent" --wallet <wallet-name> --policy programmable-policy
+ows key create --name "my-agent" --wallet <wallet-name> --policy ows-hooks
 ```
 
 ## Demo

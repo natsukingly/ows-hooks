@@ -1,6 +1,6 @@
 {
-  "id": "programmable-policy",
-  "name": "OWS Programmable Policy",
+  "id": "ows-hooks",
+  "name": "OWS Hooks",
   "version": 1,
   "created_at": "2026-04-02T00:00:00Z",
   "rules": [],

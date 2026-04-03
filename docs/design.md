@@ -1,8 +1,8 @@
-# OWS Programmable Policy — Design Document
+# OWS OWS Hooks — Design Document
 
 ## 1. Project Overview
 
-**OWS Programmable Policy** is an SDK + runtime that extends the Open Wallet Standard Policy Engine, enabling developers to write custom policies in TypeScript.
+**OWS OWS Hooks** is an SDK + runtime that extends the Open Wallet Standard Policy Engine, enabling developers to write custom policies in TypeScript.
 
 It wraps the OWS `executable` policy mechanism (stdin/stdout inter-process communication) and provides:
 
@@ -32,7 +32,7 @@ AI Agent → OWS (ows sign) → Policy Engine
                                 │
                                 ▼
                       ┌─────────────────────────┐
-                      │  Programmable Policy     │
+                      │  OWS Hooks     │
                       │    Runtime (Node.js)     │
                       │                          │
                       │  ┌── KYC Policy ───────┐ │
@@ -51,7 +51,7 @@ AI Agent → OWS (ows sign) → Policy Engine
 ### Flow
 
 1. OWS launches the executable and sends `PolicyContext` JSON to stdin
-2. The Programmable Policy Runtime evaluates policies sequentially
+2. The OWS Hooks Runtime evaluates policies sequentially
 3. Policy Chaining: the result of the previous policy influences the context of the next
 4. Each policy decision is recorded in the audit log
 5. The final result (Approve/Deny + reason) is returned to stdout within 5 seconds
@@ -266,7 +266,7 @@ This is solved with an asynchronous approval flow.
 ### Architecture
 
 ```
-Agent → OWS sign → Programmable Policy
+Agent → OWS sign → OWS Hooks
                         │
                         ├── KYC/AML/ERC-8004 → automatic decision (current implementation)
                         │
@@ -283,7 +283,7 @@ Agent → OWS sign → Programmable Policy
                             │      → Approval token issued (signed, with expiry)
                             │      → Agent retries ows sign with the approval token
                             │
-                            ├── 4. Programmable Policy validates the approval token
+                            ├── 4. OWS Hooks validates the approval token
                             │      → Valid → Allow
                             │      → Invalid/expired → Deny
                             │

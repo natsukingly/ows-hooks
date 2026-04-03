@@ -1,4 +1,4 @@
-# OWS Programmable Policy — 実装計画
+# OWS Hooks — Implementation Plan
 
 > 設計ドキュメント: [docs/design.md](docs/design.md)
 > ハッカソン: 2026-04-03（1日）
@@ -107,14 +107,120 @@ ows-programmable-policy/
 
 ---
 
-## 進捗
+## Phase 8: Rename to "OWS Hooks"
 
-| フェーズ | ステータス |
-|---------|-----------|
-| 1. OWS動作確認 & ブリッジ | ✅ 完了 |
-| 2. 評価エンジン & 監査ログ | ✅ 完了 |
-| 3. モックポリシー | ✅ 完了 |
-| 4. ERC-8004（実動作） | ✅ Base Sepolia 実接続完了 |
-| 5. Policy Chaining（実動作） | ✅ 完了 |
-| 6. デモ & 統合 | ✅ 完了 |
-| 7. ドキュメント & 提出 | ✅ 完了 |
+Rebrand from "OWS Programmable Policy" to "OWS Hooks" — the project is a hooks framework, not just a single policy.
+
+### Tasks
+
+- [ ] 8.0a GitHub repo rename: `ows-programmable-policy` → `ows-hooks` (via `gh repo rename`)
+- [ ] 8.0b Update `package.json` name field to `ows-hooks`
+- [ ] 8.0c Update README.md title and all references
+- [ ] 8.0d Update `ows-policy.json` if it references the old name
+- [ ] 8.0e Update docs/ references
+- [ ] 8.0f Update demo scripts if they reference old paths
+- [ ] 8.0g Commit and push rename changes
+
+---
+
+## Phase 9: Human-in-the-Loop Approval (Pattern 1: Polling)
+
+### Design
+
+OWS policy is a stateless executable (stdin → stdout). There's no native `pending` state.
+We use a **Deny → Approve → Retry** pattern:
+
+```
+1st request:  Agent → Policy → high-value detected → DENY (reason: "PENDING_APPROVAL")
+                                                    → on-deny hook sends Slack notification
+Human approves: Slack button / CLI → approval record saved to SQLite
+
+2nd request:  Agent → Policy → high-value detected → approval found → ALLOW
+```
+
+### Security Concerns (KNOWN LIMITATIONS)
+
+| Threat | Severity | Mitigation | Status |
+|--------|----------|------------|--------|
+| Approval replay | HIGH | tx_hash binds to exact (to, value, chain_id). Single-use. | Implement |
+| Unauthenticated API | HIGH | HMAC token required to approve | Implement |
+| TTL too long | MEDIUM | Default 15 min, configurable | Implement |
+| Slack token leak | MEDIUM | Channel access = approval access | Document only |
+| No approver identity verification | MEDIUM | No cryptographic proof of who approved | Document as future work |
+| Infinite retry | LOW | Max retries tracked per approval | Implement |
+| DB tampering | LOW | Append-only triggers on approvals table | Implement |
+| No multi-party approval (M-of-N) | LOW | Single approver only | Document as future work |
+
+### Tasks
+
+- [ ] 9.1 `src/approval.ts` — Approval DB table + CRUD + HMAC token generation/verification
+  - `approvals` table in existing audit.db
+  - Schema: id, tx_hash, agent_id, wallet_id, chain_id, tx_to, tx_value, status, requested_at, expires_at, approved_by, approved_at, hmac
+  - Append-only triggers (no DELETE/UPDATE)
+  - TTL validation (default 15 min via `HITL_APPROVAL_TTL_MINUTES`)
+  - HMAC-SHA256 signing with `HITL_HMAC_SECRET` env var
+
+- [ ] 9.2 `src/policies/hitl-approval.ts` — HITL policy
+  - Position: after policy-chain, before x402-trust
+  - Trigger condition: tx value > threshold AND agent reputation < 80
+  - Logic:
+    1. Compute tx_hash = SHA256(to + value + chain_id)
+    2. Query approvals table for matching approved record
+    3. If valid approval found → allow, mark as used
+    4. If no approval → create pending record, deny with `PENDING_APPROVAL:<approval_id>`
+  - Security: verify HMAC on approval record, check expiry, check single-use
+
+- [ ] 9.3 `src/approval-server.ts` — Lightweight approval HTTP API
+  - Node.js built-in `http` module (no Express)
+  - `POST /approve/:id` — requires `Authorization: Bearer <hmac_token>` header
+  - `GET /pending` — list pending approvals
+  - `GET /health` — health check
+  - Runs as separate process: `node dist/approval-server.js`
+
+- [ ] 9.4 Extend on-deny hook for HITL notifications
+  - Detect `PENDING_APPROVAL` in deny reason
+  - Send Slack message with approval ID and instructions
+  - Include approval command in stderr retry guidance
+
+- [ ] 9.5 Register hitl-approval in main.ts policy chain
+  - Insert after policy-chain (position 5), before x402-trust
+
+- [ ] 9.6 `scripts/approve.sh` — CLI tool for manual approval
+  - Usage: `bash scripts/approve.sh <approval_id>`
+  - Computes HMAC and calls approval API
+
+- [ ] 9.7 Tests for HITL
+  - Approval token CRUD (create, verify, expire, single-use)
+  - HITL policy (deny without approval, allow with approval, expired token, replay blocked)
+  - Integration: full pipeline with HITL
+
+- [ ] 9.8 Update demo/run-demo.sh with HITL scenarios
+  - Scenario 6: High-value tx → DENY (PENDING_APPROVAL) → approve → retry → ALLOW
+  - Scenario 7: Expired approval → DENY
+
+- [ ] 9.9 Update README.md
+  - Add HITL section with architecture diagram
+  - Document security concerns table (same as above)
+  - Document known limitations and future work
+  - Add env vars: HITL_HMAC_SECRET, HITL_APPROVAL_TTL_MINUTES, HITL_VALUE_THRESHOLD, APPROVAL_SERVER_PORT
+
+- [ ] 9.10 Add code-level security comments
+  - Each security concern documented as `// SECURITY:` comment at the relevant code location
+  - `// KNOWN LIMITATION:` for issues we chose not to solve
+  - `// FUTURE:` for proposed improvements
+
+---
+
+## Progress
+
+| Phase | Status |
+|-------|--------|
+| 1. OWS bridge | ✅ Done |
+| 2. Evaluation engine & audit | ✅ Done |
+| 3. Mock policies | ✅ Done |
+| 4. ERC-8004 (on-chain) | ✅ Done |
+| 5. Policy Chaining | ✅ Done |
+| 6. Demo & integration | ✅ Done |
+| 7. Docs & submission | ✅ Done |
+| 8. Rename to OWS Hooks | 🔧 In Progress |
+| 9. Human-in-the-Loop | ⏳ Waiting |
