@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { resolveConfig, loadConfig, type HooksConfig } from "../src/config.js";
+import { resolveConfig, validateConfig, type HooksConfig } from "../src/config.js";
 import { policyRegistry } from "../src/registry.js";
 
 describe("resolveConfig", () => {
@@ -83,6 +83,18 @@ describe("resolveConfig", () => {
     for (const name of knownNames) {
       expect(policyRegistry.has(name)).toBe(true);
     }
+  });
+
+  it("validateConfig throws on unknown keys", () => {
+    expect(() => validateConfig({ "pre_sign": ["aml-check"] })).toThrow('unknown key "pre_sign"');
+  });
+
+  it("validateConfig throws on non-array values", () => {
+    expect(() => validateConfig({ "pre-sign": "aml-check" })).toThrow('"pre-sign" must be an array');
+  });
+
+  it("validateConfig accepts valid config", () => {
+    expect(() => validateConfig({ "pre-sign": ["aml-check"], "post-sign": ["stderr-log"] })).not.toThrow();
   });
 
   it("warns on empty pre-sign array", () => {

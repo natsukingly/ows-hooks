@@ -10,7 +10,7 @@
 ```jsonc
 // ows-hooks.json
 {
-  "policies": [
+  "pre-sign": [
     "tx-safety",
     "aml-check",
     "erc8004-agent",
@@ -18,17 +18,15 @@
     "hitl-approval",
     "x402-trust"
   ],
-  "hooks": {
-    "post-sign": ["demo-log", "external-audit", "slack-notify"],
-    "on-deny":   ["demo-log", "retry-guidance", "alert-webhook", "slack-alert"]
-  }
+  "post-sign": ["stderr-log", "external-audit", "slack-notify"],
+  "on-deny":   ["stderr-log", "retry-guidance", "alert-webhook", "slack-alert"]
 }
 ```
 
 **ポイント:**
-- `policies` の配列順 = 評価順序（先頭から実行）
-- `hooks` は種別（post-sign / on-deny）ごとに名前で指定
-- JSON にないポリシー/hooks は実行されない
+- `pre-sign` の配列順 = 評価順序（先頭から実行）
+- `post-sign` / `on-deny` は署名後・拒否後に発火するフック
+- JSON にないフックは実行されない
 - ファイルがなければ現在のハードコードと同じ動作（後方互換）
 
 ## Implementation

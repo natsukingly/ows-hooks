@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { getSharedDb } from "./db.js";
+import { getSharedDb, resolveDbPath } from "./db.js";
 
 // ── Configuration ──
 
@@ -9,9 +9,7 @@ const MAX_RETRIES = 3;
 function getHmacSecret(): string {
   const secret = process.env["HITL_HMAC_SECRET"];
   if (!secret || secret === "dev-secret-change-in-production") {
-    throw new Error(
-      "HITL_HMAC_SECRET must be set to a strong random value (default/insecure value is not allowed)",
-    );
+    throw new Error("HITL approval requires a configured HMAC secret");
   }
   return secret;
 }
@@ -40,14 +38,17 @@ export interface ApprovalRecord {
 // ── DB Setup ──
 
 let initialized = false;
+let initializedDbPath: string | null = null;
 
 /** Reset initialization state (for testing only) */
 export function resetApprovalState(): void {
   initialized = false;
+  initializedDbPath = null;
 }
 
 function ensureTable(): void {
-  if (initialized) return;
+  const dbPath = resolveDbPath();
+  if (initialized && initializedDbPath === dbPath) return;
   const db = getSharedDb();
 
   db.exec(`
@@ -79,6 +80,7 @@ function ensureTable(): void {
   `);
 
   initialized = true;
+  initializedDbPath = dbPath;
 }
 
 // ── HMAC ──
@@ -107,10 +109,8 @@ export function verifyHmac(record: ApprovalRecord): boolean {
     tx_value: record.tx_value,
     chain_id: record.chain_id,
   });
-  const expectedBuf = Buffer.from(expected, "hex");
-  const actualBuf = Buffer.from(record.hmac, "hex");
-  if (expectedBuf.length !== actualBuf.length) return false;
-  return timingSafeEqual(expectedBuf, actualBuf);
+  if (expected.length !== record.hmac.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(record.hmac));
 }
 
 // ── Transaction Hash ──
@@ -300,15 +300,6 @@ export function approveRequest(id: string, approvedBy: string): boolean {
   return true;
 }
 
-/** Mark an approval as used (single-use enforcement) */
-// SECURITY: Each approval can only be used once. After use, it is marked as 'used'
-// and cannot be replayed for the same or any other transaction.
-export function markAsUsed(id: string): void {
-  ensureTable();
-  const db = getSharedDb();
-  db.prepare("UPDATE approvals SET status = 'used' WHERE id = ?").run(id);
-}
-
 /** List all pending approvals (for dashboard/CLI) */
 export function listPending(): ApprovalRecord[] {
   ensureTable();
@@ -330,8 +321,6 @@ export function generateApprovalToken(approvalId: string): string {
 /** Verify an API approval token */
 export function verifyApprovalToken(approvalId: string, token: string): boolean {
   const expected = generateApprovalToken(approvalId);
-  const expectedBuf = Buffer.from(expected, "hex");
-  const actualBuf = Buffer.from(token, "hex");
-  if (expectedBuf.length !== actualBuf.length) return false;
-  return timingSafeEqual(expectedBuf, actualBuf);
+  if (expected.length !== token.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(token));
 }

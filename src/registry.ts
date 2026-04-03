@@ -32,12 +32,17 @@ export const defaultPolicyOrder: readonly string[] = [
   "x402-trust",
 ];
 
-/** Default hooks when no config file is present */
+/** Default hooks when no config file is present (explicitly listed, not auto-spread from registry) */
 export const defaultPostSignHooks: readonly string[] = [
-  ...postSignHookRegistry.keys(),
+  "stderr-log",
+  "external-audit",
+  "slack-notify",
 ];
 export const defaultOnDenyHooks: readonly string[] = [
-  ...onDenyHookRegistry.keys(),
+  "stderr-log",
+  "retry-guidance",
+  "alert-webhook",
+  "slack-alert",
 ];
 
 // Re-export hook registries for config resolver

@@ -4,10 +4,10 @@ import {
   createApproval,
   approveRequest,
   findValidApproval,
+  consumeValidApproval,
   computeTxHash,
   verifyApprovalToken,
   generateApprovalToken,
-  markAsUsed,
   listPending,
   resetApprovalState,
 } from "../src/approval.js";
@@ -88,7 +88,7 @@ describe("Approval CRUD", () => {
     expect(success).toBe(false);
   });
 
-  it("marks approval as used (single-use)", () => {
+  it("consumeValidApproval atomically marks as used (single-use)", () => {
     const approval = createApproval({
       agent_id: "test-agent",
       wallet_id: "test-wallet",
@@ -98,16 +98,22 @@ describe("Approval CRUD", () => {
     });
 
     approveRequest(approval.id, "alice");
-    markAsUsed(approval.id);
 
-    // After marking as used, findValidApproval should return null
-    const valid = findValidApproval({
+    const params = {
       agent_id: "test-agent",
       tx_to: "0xABC",
       tx_value: "2000000000000000000",
       chain_id: "eip155:1",
-    });
-    expect(valid).toBeNull();
+    };
+
+    // First consume succeeds
+    const consumed = consumeValidApproval(params);
+    expect(consumed).not.toBeNull();
+    expect(consumed!.approved_by).toBe("alice");
+
+    // Second consume fails (already used)
+    const replay = consumeValidApproval(params);
+    expect(replay).toBeNull();
   });
 
   it("lists pending approvals", () => {

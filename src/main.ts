@@ -30,6 +30,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Validate transaction.value is a valid integer string (policies use BigInt)
+  if (ctx.transaction.value && !/^\d+$/.test(ctx.transaction.value)) {
+    writeResult({ allow: false, reason: "transaction.value must be a non-negative integer string (wei)" });
+    return;
+  }
+
   try {
     // Load config from ows-hooks.json (falls back to defaults if file is absent)
     const config = loadConfig();

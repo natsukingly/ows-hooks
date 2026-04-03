@@ -30,25 +30,24 @@ export function loadConfig(): HooksConfig | null {
   if (!existsSync(configPath)) return null;
 
   const raw = readFileSync(configPath, "utf-8");
-  const config = JSON.parse(raw) as HooksConfig;
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  validateConfig(parsed);
+  return parsed as unknown as HooksConfig;
+}
 
-  // Validate known keys
+export function validateConfig(config: Record<string, unknown>): void {
   const validKeys = new Set(["pre-sign", "post-sign", "on-deny"]);
   for (const key of Object.keys(config)) {
     if (!validKeys.has(key)) {
       throw new Error(`ows-hooks.json: unknown key "${key}". Valid keys: ${[...validKeys].join(", ")}`);
     }
   }
-
-  // Validate array types
   for (const key of validKeys) {
-    const value = config[key as keyof HooksConfig];
+    const value = config[key];
     if (value !== undefined && !Array.isArray(value)) {
       throw new Error(`ows-hooks.json: "${key}" must be an array of strings`);
     }
   }
-
-  return config;
 }
 
 export function resolveConfig(config: HooksConfig | null): ResolvedConfig {
