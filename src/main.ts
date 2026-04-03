@@ -5,6 +5,7 @@ import { amlCheck } from "./policies/aml-check.js";
 import { erc8004Agent } from "./policies/erc8004-agent.js";
 import { policyChain } from "./policies/policy-chain.js";
 import { x402Trust } from "./policies/x402-trust.js";
+import { hitlApproval } from "./policies/hitl-approval.js";
 import { postSignHooks } from "./hooks/post-sign.js";
 import { onDenyHooks } from "./hooks/on-deny.js";
 import type { Policy, PolicyContext, PolicyResult, PostSignHook, OnDenyHook } from "./types.js";
@@ -15,6 +16,7 @@ const policies: readonly Policy[] = Object.freeze([
   amlCheck,
   erc8004Agent,
   policyChain,
+  hitlApproval,
   x402Trust,
 ]);
 

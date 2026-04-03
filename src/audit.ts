@@ -1,18 +1,12 @@
-import Database from "better-sqlite3";
-import path from "node:path";
+import type Database from "better-sqlite3";
 import type { AuditEntry } from "./types.js";
+import { getSharedDb, closeDb } from "./db.js";
 
-const DB_PATH = path.join(
-  process.env["OWS_PP_AUDIT_DB"] ?? path.join(process.cwd(), "audit.db"),
-);
+let initialized = false;
 
-let db: Database.Database | null = null;
-
-function getDb(): Database.Database {
-  if (db) return db;
-
-  db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
+function ensureTable(): void {
+  if (initialized) return;
+  const db = getSharedDb();
 
   // Create table
   db.exec(`
@@ -48,34 +42,31 @@ function getDb(): Database.Database {
     END;
   `);
 
-  return db;
+  initialized = true;
 }
-
-const insertStmt = () =>
-  getDb().prepare(`
-  INSERT INTO audit_log (timestamp, agent_id, wallet_id, chain_id, tx_to, tx_value, policy_name, result, reason, context_hash)
-  VALUES (@timestamp, @agent_id, @wallet_id, @chain_id, @tx_to, @tx_value, @policy_name, @result, @reason, @context_hash)
-`);
 
 let cachedInsert: Database.Statement | null = null;
 
 export function recordAudit(entry: AuditEntry): void {
+  ensureTable();
   if (!cachedInsert) {
-    cachedInsert = insertStmt();
+    cachedInsert = getSharedDb().prepare(`
+      INSERT INTO audit_log (timestamp, agent_id, wallet_id, chain_id, tx_to, tx_value, policy_name, result, reason, context_hash)
+      VALUES (@timestamp, @agent_id, @wallet_id, @chain_id, @tx_to, @tx_value, @policy_name, @result, @reason, @context_hash)
+    `);
   }
   cachedInsert.run(entry);
 }
 
 /** Retrieve all audit log entries (for demo/debug purposes) */
 export function getAuditLog(): AuditEntry[] {
-  return getDb().prepare("SELECT * FROM audit_log ORDER BY id").all() as AuditEntry[];
+  ensureTable();
+  return getSharedDb().prepare("SELECT * FROM audit_log ORDER BY id").all() as AuditEntry[];
 }
 
 /** Close the DB connection */
 export function closeAudit(): void {
-  if (db) {
-    db.close();
-    db = null;
-    cachedInsert = null;
-  }
+  cachedInsert = null;
+  initialized = false;
+  closeDb();
 }

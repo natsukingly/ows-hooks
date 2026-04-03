@@ -163,6 +163,85 @@ run_policy '{
   "timestamp": "2026-04-03T10:05:00Z"
 }'
 
+# ── Scenario 6: Human-in-the-Loop — Deny → Approve → Allow ──
+print_header "Human-in-the-Loop Approval"
+
+print_scenario 6 "HITL — High Reputation + Critical Value (no approval)" \
+  "High-reputation agent (90) + 10 ETH (critical) → requires human approval → DENY"
+
+HITL_RESULT=$(echo '{
+  "chain_id": "eip155:1",
+  "wallet_id": "test-wallet",
+  "api_key_id": "trusted-agent",
+  "transaction": {
+    "to": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD0C",
+    "value": "10000000000000000000",
+    "raw_hex": "0x00",
+    "data": "0x"
+  },
+  "spending": { "daily_total": "0", "date": "2026-04-03" },
+  "timestamp": "2026-04-03T10:06:00Z"
+}' | ERC8004_MOCK=true node "$DIR/dist/main.js" 2>/dev/null)
+
+HITL_REASON=$(echo "$HITL_RESULT" | node -e "process.stdin.on('data',d=>{const r=JSON.parse(d);process.stdout.write(r.reason||'')})")
+echo -e "  ${RED}✗ DENY${NC} — ${HITL_REASON:0:80}..."
+
+# Extract approval ID and token
+APPROVAL_ID=$(echo "$HITL_REASON" | node -e "process.stdin.on('data',d=>{const m=String(d).match(/PENDING_APPROVAL:([a-f0-9-]+):/);process.stdout.write(m?m[1]:'')})")
+APPROVAL_TOKEN=$(echo "$HITL_REASON" | node -e "process.stdin.on('data',d=>{const m=String(d).match(/PENDING_APPROVAL:[a-f0-9-]+:([a-f0-9]+)/);process.stdout.write(m?m[1]:'')})")
+
+if [ -n "$APPROVAL_ID" ]; then
+  print_scenario "6b" "HITL — Human approves via SQLite" \
+    "Simulating human approval (normally via approval-server API)"
+
+  # Directly approve in DB (simulates the approval server)
+  sqlite3 "$DIR/audit.db" "UPDATE approvals SET status='approved', approved_by='demo-operator', approved_at='$(date -u +%Y-%m-%dT%H:%M:%SZ)' WHERE id='$APPROVAL_ID';"
+  echo -e "  ${YELLOW}⏳ Approved by demo-operator${NC}"
+
+  print_scenario "6c" "HITL — Retry after approval" \
+    "Same transaction retried → approval found → ALLOW"
+
+  run_policy '{
+    "chain_id": "eip155:1",
+    "wallet_id": "test-wallet",
+    "api_key_id": "trusted-agent",
+    "transaction": {
+      "to": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD0C",
+      "value": "10000000000000000000",
+      "raw_hex": "0x00",
+      "data": "0x"
+    },
+    "spending": { "daily_total": "0", "date": "2026-04-03" },
+    "timestamp": "2026-04-03T10:07:00Z"
+  }'
+
+  print_scenario "6d" "HITL — Replay blocked (single-use)" \
+    "Same transaction again → approval already used → DENY"
+
+  REPLAY_RESULT=$(echo '{
+    "chain_id": "eip155:1",
+    "wallet_id": "test-wallet",
+    "api_key_id": "trusted-agent",
+    "transaction": {
+      "to": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD0C",
+      "value": "10000000000000000000",
+      "raw_hex": "0x00",
+      "data": "0x"
+    },
+    "spending": { "daily_total": "0", "date": "2026-04-03" },
+    "timestamp": "2026-04-03T10:08:00Z"
+  }' | ERC8004_MOCK=true node "$DIR/dist/main.js" 2>/dev/null)
+
+  REPLAY_ALLOW=$(echo "$REPLAY_RESULT" | node -e "process.stdin.on('data',d=>{const r=JSON.parse(d);process.stdout.write(String(r.allow))})")
+  REPLAY_REASON=$(echo "$REPLAY_RESULT" | node -e "process.stdin.on('data',d=>{const r=JSON.parse(d);process.stdout.write(r.reason||'')})")
+
+  if [ "$REPLAY_ALLOW" = "true" ]; then
+    echo -e "  ${GREEN}✓ ALLOW${NC}"
+  else
+    echo -e "  ${RED}✗ DENY${NC} — ${REPLAY_REASON:0:80}..."
+  fi
+fi
+
 # ── Audit Log ──
 print_header "Audit Log"
 echo ""
@@ -172,6 +251,15 @@ if command -v sqlite3 &>/dev/null; then
     "SELECT id, policy_name, result, substr(reason, 1, 60) as reason FROM audit_log ORDER BY id;"
 else
   echo "  sqlite3 not found. Run: sqlite3 audit.db 'SELECT * FROM audit_log;'"
+fi
+
+# ── Approvals Table ──
+if command -v sqlite3 &>/dev/null; then
+  echo ""
+  print_header "Approval Log"
+  echo ""
+  sqlite3 -header -column "$DIR/audit.db" \
+    "SELECT id, status, agent_id, approved_by, substr(expires_at, 1, 19) as expires_at FROM approvals ORDER BY requested_at;" 2>/dev/null || true
 fi
 
 echo ""
